@@ -191,7 +191,7 @@ export class Engine {
         // (defense-in-depth alongside the missing-CORS-handler preflight that already blocks JSON POSTs).
         if (!originAllowed(req.headers.origin)) return json(res, 403, { error: 'forbidden origin' });
         const body = await readJson<DashboardToServer>(req);
-        await this.store.resolveContext(body.violationId, body.action);
+          await this.resolveDecision(body.violationId, body.action);
         return json(res, 200, { ok: true });
       }
       if (req.method === 'POST' && req.url === '/intercept') {
@@ -468,6 +468,19 @@ export class Engine {
     return [...seen.values()].sort((a, b) => (b.lastTs ?? b.updatedAt ?? 0) - (a.lastTs ?? a.updatedAt ?? 0));
   }
 
+  /**
+   * Resolve a held call from a human decision, RE-CHECKING the current agent control state first (M9).
+   * The pause/quarantine gate sits at the top of /intercept, so a call already held when the operator
+   * changed status would otherwise be released by a stale approval — and execute. We fail closed: if the
+   * session is now paused/quarantined, force BLOCK with the operator's reason, whatever the caller asked.
+   */
+  private async resolveDecision(violationId: string, action: FinalAction): Promise<void> {
+    const held = this.store.pending().find((v) => v.id === violationId);
+    const blockReason = held ? this.controls.blockReason(held.toolCall.sessionId) : null;
+    if (blockReason) return this.store.resolveContext(violationId, 'BLOCK', blockReason);
+    return this.store.resolveContext(violationId, action);
+  }
+
   /* ------------------------------- WebSocket -------------------------------- */
 
   private onDashboardConnect(ws: WebSocket): void {
@@ -480,7 +493,7 @@ export class Engine {
     ws.on('message', (raw) => {
       try {
         const msg = JSON.parse(raw.toString()) as DashboardToServer;
-        if (msg.type === 'decision') void this.store.resolveContext(msg.violationId, msg.action);
+        if (msg.type === 'decision') void this.resolveDecision(msg.violationId, msg.action);
       } catch {
         /* ignore malformed dashboard messages */
       }

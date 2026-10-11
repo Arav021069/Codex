@@ -71,6 +71,7 @@
     "e2e:risk": "node scripts/risk-e2e.mjs",
     "test:audit-chain": "tsx scripts/audit-chain.test.ts",
     "test:controls": "tsx scripts/controls.test.ts",
+    "test:approval-controls": "tsx scripts/approval-controls.test.ts",
     "demo": "node scripts/demo.mjs",
     "demo:seed": "tsx src/cli/index.ts demo seed",
     "test:init": "tsx scripts/init.test.ts",

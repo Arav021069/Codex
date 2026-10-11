@@ -16,8 +16,8 @@ import type { FinalAction, PipelineResult, SecurityViolation } from '../contract
 export interface IPendingStore {
   /** Hold a request until a human acts, the TTL fires, or the client disconnects. */
   registerContext(violation: SecurityViolation, ttlMs: number): Promise<PipelineResult>;
-  /** Release a held request with a human decision. No-op if already resolved. */
-  resolveContext(violationId: string, action: FinalAction): Promise<void>;
+  /** Release a held request with a human decision. No-op if already resolved. `reason` overrides the default. */
+  resolveContext(violationId: string, action: FinalAction, reason?: string): Promise<void>;
   /** Discard a held request because the client went away. No-op if already resolved. */
   cleanup(violationId: string): Promise<void>;
   /** Snapshot of currently-held requests (e.g. to hydrate a freshly-connected dashboard). */
@@ -56,7 +56,7 @@ export class InMemoryPendingStore extends EventEmitter implements IPendingStore 
     });
   }
 
-  async resolveContext(violationId: string, action: FinalAction): Promise<void> {
+  async resolveContext(violationId: string, action: FinalAction, reason?: string): Promise<void> {
     const entry = this.entries.get(violationId);
     if (!entry) return;
     clearTimeout(entry.timer);
@@ -64,7 +64,7 @@ export class InMemoryPendingStore extends EventEmitter implements IPendingStore 
     this.emit('resolved', violationId, action);
     entry.resolve({
       action,
-      reason: action === 'ALLOW' ? 'Cerberus: approved by human.' : 'Cerberus: denied by human.',
+      reason: reason ?? (action === 'ALLOW' ? 'Cerberus: approved by human.' : 'Cerberus: denied by human.'),
       violationId,
     });
   }
