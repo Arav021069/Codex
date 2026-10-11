@@ -1,5 +1,5 @@
 {
-  "name": "cerberus-dashboard",
+  "name": "warden-dashboard",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@cerberussec/core": "file:..",
+    "gsap": "^3.15.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

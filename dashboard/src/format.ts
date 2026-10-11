@@ -11,14 +11,14 @@ export const CATEGORY_STYLE: Record<ToolCategory, string> = {
 
 /** Per-event-kind presentation: a glyph, a short label, and a dot color for the timeline rail. */
 export const EVENT_META: Record<AuditEvent, { icon: string; label: string; dot: string }> = {
-  'decision': { icon: '⚖', label: 'Decision', dot: 'bg-slate-400' },
-  'hitl-opened': { icon: '⏸', label: 'Held for review', dot: 'bg-amber-400' },
-  'hitl-resolved': { icon: '✓', label: 'Review resolved', dot: 'bg-emerald-400' },
-  'session-started': { icon: '▶', label: 'Session started', dot: 'bg-sky-400' },
-  'session-ended': { icon: '■', label: 'Session ended', dot: 'bg-slate-500' },
-  'taint-loaded': { icon: '🔑', label: 'Secret loaded', dot: 'bg-orange-400' },
-  'injection-detected': { icon: '🧪', label: 'Injection detected', dot: 'bg-red-400' },
-  'tool-failed': { icon: '✕', label: 'Tool failed', dot: 'bg-rose-500' },
+  'decision': { icon: 'D', label: 'Decision', dot: 'bg-slate-400' },
+  'hitl-opened': { icon: 'H', label: 'Held for review', dot: 'bg-amber-400' },
+  'hitl-resolved': { icon: 'R', label: 'Review resolved', dot: 'bg-emerald-400' },
+  'session-started': { icon: 'S', label: 'Session started', dot: 'bg-sky-400' },
+  'session-ended': { icon: 'E', label: 'Session ended', dot: 'bg-slate-500' },
+  'taint-loaded': { icon: 'T', label: 'Secret loaded', dot: 'bg-orange-400' },
+  'injection-detected': { icon: 'I', label: 'Injection detected', dot: 'bg-red-400' },
+  'tool-failed': { icon: 'F', label: 'Tool failed', dot: 'bg-rose-500' },
 };
 
 /** Turn a raw tool call into a human-readable "what the agent wants to do" (title + optional body). */

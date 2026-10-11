@@ -1,18 +1,118 @@
-# Cerberus 🐺
+# Warden
 
-[![license](https://img.shields.io/github/license/Asati-git/ai-agent-firewall.svg)](./LICENSE)
+Warden is the hackathon product name and dashboard experience built on the Cerberus local-first agent security gateway. The engine, adapters, policy rules, and project notices come from the upstream Cerberus project; Warden-specific interface changes add a sentinel-themed dashboard for live decisions and session review. The inherited gateway and command-line tool retain their Cerberus names.
+
+## Contents
+
+- [Set up Warden](#set-up-warden)
+- [Project structure](#project-structure)
+- [Hackathon jury presentation](#hackathon-jury-presentation)
+- [Build, testing, and test cases](#build-testing-and-test-cases)
+- [Inherited gateway setup and usage](#setup--usage)
+- [Upstream licensing](#local-first--licensing)
+
+## Set up Warden
+
+### Requirements
+
+- Node.js 20 or later, with npm
+- Git
+- A supported agent integration for live tool-call interception; see [Agents](#agents)
+
+### Install and build
+
+```bash
+git clone https://github.com/bhoomik-codes/codex-3-hackathon.git
+cd codex-3-hackathon
+npm install
+npm --prefix dashboard install
+node bin/cerberus.mjs rules validate
+npm run build
+```
+
+The command-line entry point and package names retain their upstream Cerberus names. Preview the Codex hook configuration before changing agent settings:
+
+```bash
+node bin/cerberus.mjs init --agent codex --print
+```
+
+Start the local gateway and open the dashboard:
+
+```bash
+node bin/cerberus.mjs engine
+```
+
+The engine binds to `127.0.0.1:9000`. After building, open [http://127.0.0.1:9000/](http://127.0.0.1:9000/). Keep the engine terminal running while you use an agent or dashboard approval. To install the hook after reviewing its preview, run `node bin/cerberus.mjs init --agent codex`. The full setup and other agent options are in [Setup & usage](#setup--usage).
+
+## Project structure
+
+```text
+bin/                   inherited command-line entry point
+dashboard/             Warden React/Vite dashboard
+  src/App.tsx           live operations, review queue, and audit stream
+  src/SessionsView.tsx  session history, timeline, and replay
+examples/               sample agent configuration
+packages/               optional packages, including the injection model
+rules/                  policy, risk weights, feeds, and advisories
+scripts/                tests, integration checks, and attack simulations
+spike/                  experimental security research and prototypes
+src/                    gateway, policy, hooks, signals, and proxy
+LICENSE                 upstream Apache-2.0 license
+NOTICE                  upstream copyright and attribution notice
+THIRD_PARTY_NOTICES.md  third-party components and notices
+HACKATHON_TODO.md       prioritized Warden build plan
+JURY_DEMO_GUIDE.md      complete jury presentation script and Q&A
+```
+
+## Hackathon jury presentation
+
+Use [JURY_DEMO_GUIDE.md](JURY_DEMO_GUIDE.md) for setup, the timed five-minute walkthrough, a three-minute version, likely jury questions, and a failure fallback.
+
+Recommended demo order:
+
+1. Show the gateway connected and explain that Warden evaluates supported tool calls before execution.
+2. Trigger a harmless read and point out its allow decision and audit entry.
+3. Submit a policy-blocked request without running its payload; show the block reason.
+4. Trigger a human-review request, decide it in the dashboard, and show the resolved audit event.
+5. Open the matching session timeline, then close with verified scope and limitations.
+
+Use synthetic data and never execute destructive demo payloads. Be clear that the gateway and dashboard are based on Cerberus, and distinguish inherited capabilities from Warden-specific work.
+
+## Build, testing, and test cases
+
+Build the engine and dashboard together:
+
+```bash
+npm run build
+```
+
+Run the selected verification suites:
+
+```bash
+npm run test:policy
+npm run test:adapters
+npm run test:audit
+```
+
+The verified baseline is **67 passing checks**:
+
+- **Policy (31):** `ls -la` allows; `rm -rf src` blocks; `git push` and sensitive-key reads require review; `cat .env` blocks; suspicious egress to `pastebin.com` requires review while trusted `github.com` egress allows.
+- **Adapters (22):** Claude Code, Codex, Cursor, and Cline event parsing and allow, ask, or deny response formatting.
+- **Audit (14):** valid decisions and lifecycle events persist; malformed events and missing required fields are rejected.
+
+Other inherited suites are available as individual `test:*` scripts in `package.json`. End-to-end, attack, and red-team simulations are separate commands. Passing the selected checks is not a full security assessment; see [What it is — and isn't](#what-it-is--and-isnt) and the [jury guide](JURY_DEMO_GUIDE.md).
+
+[![license](https://img.shields.io/github/license/bhoomik-codes/codex-3-hackathon.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
-[![CI](https://github.com/Asati-git/ai-agent-firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/Asati-git/ai-agent-firewall/actions/workflows/ci.yml)
+[![CI](https://github.com/bhoomik-codes/codex-3-hackathon/actions/workflows/ci.yml/badge.svg)](https://github.com/bhoomik-codes/codex-3-hackathon/actions/workflows/ci.yml)
 
-![Cerberus intercepting an agent's tool calls in real time — allow, block, and hold-for-approval](cerberus-demo.gif)
-
-A **local-first security gateway for autonomous AI coding agents.** Cerberus sits between the agent
+A **local-first security gateway for autonomous AI coding agents.** Warden sits between the agent
 (Claude Code, Codex, Cursor, Cline) and your machine, intercepts **every tool call** before it runs,
 risk-scores it across four signals, and either **allows, audits, asks for human approval, or blocks**
 it — all on your machine, with **no external API and nothing leaving the box.**
 
 ## Setup & usage
-Cerberus isn't on npm yet — you install it **from source**. It runs on **Windows, macOS, and Linux**
+Warden is installed **from source**. The inherited gateway runs on **Windows, macOS, and Linux**
 (the Cline adapter is macOS/Linux only; Claude Code / Codex / Cursor work everywhere).
 
 **Prerequisites:** [Node.js **≥ 20**](https://nodejs.org) (check with `node -v`), plus `git` and `npm`
@@ -65,8 +165,8 @@ it once). Port 9000 already in use? `CB_ENGINE_PORT=9001 node bin/cerberus.mjs e
 wherever the agent runs).
 
 ### 4 · Use your agent as normal
-Tool calls now route through Cerberus. **Risky** ones (`rm -rf`, reading `~/.ssh`, a leaked `.env`, an odd
-network egress) surface your agent's **native approve/deny prompt** with Cerberus's reason; safe calls
+Tool calls now route through Warden. **Risky** ones (`rm -rf`, reading `~/.ssh`, a leaked `.env`, an odd
+network egress) surface your agent's **native approve/deny prompt** with Warden's reason; safe calls
 pass silently.
 > If the engine **isn't** running, calls are **blocked by default** (fail-closed — a firewall that fails
 > silently open is worse than none). Set `CB_FAIL_OPEN=1` to allow calls through while it's down instead.
@@ -129,7 +229,7 @@ node bin/cerberus.mjs feeds refresh  # refresh the offline malicious-domain feed
 Autonomous coding agents run shell commands, edit files, and make network calls on your behalf — at
 machine speed, often unattended. One bad step (`rm -rf`, an unwanted `git push`, a leaked `.env`, a
 poisoned README that tricks the agent into exfiltrating secrets) and there's no human in the loop to
-stop it. Cerberus puts that checkpoint **on the tool boundary**, where the agent actually acts.
+stop it. Warden puts that checkpoint **on the tool boundary**, where the agent actually acts.
 
 ## What it does
 ```
@@ -167,23 +267,23 @@ prohibitions can never override.
 ```bash
 # install from source (see "Setup & usage" above — npm publish pending), then, e.g. after `npm link`:
 
-# wire Cerberus into your agent (merges into the agent's config — backed up, idempotent):
+# wire Warden into your agent (merges into the agent's config — backed up, idempotent):
 cerberus init                 # Claude Code, project-level   (--agent codex|cursor|cline, --global, --print)
 
 # start the gateway + dashboard (one process):
 cerberus engine               # then open http://127.0.0.1:9000/
 ```
 
-Use your agent as usual — tool calls now route through Cerberus. By default a held (HITL) call is
-**approved right in the terminal**: Cerberus returns `ask`, so Claude Code shows its native
-permission prompt with Cerberus's reason — approve/deny without leaving your session.
+Use your agent as usual — tool calls now route through Warden. By default a held (HITL) call is
+**approved right in the terminal**: Warden returns `ask`, so Claude Code shows its native
+permission prompt with Warden's reason — approve/deny without leaving your session.
 
 The dashboard (`http://127.0.0.1:9000/`) has a **Live** tab (Action Center + stream) and a
 **Sessions** tab — a forensic timeline per session with a risk-factor breakdown and a **Replay**
 player to step through how a session's risk built up.
 
 ## Beyond the tool boundary (defense in depth)
-Several commands extend Cerberus past the PreToolUse hook:
+The inherited command-line tools also cover tasks beyond the PreToolUse hook:
 
 ```bash
 # 1. Scan MCP tool definitions for POISONING + rug-pull (tool-pinning). Auto-discovers your MCP
@@ -214,13 +314,13 @@ key sent over plaintext or to a non-provider host, and a curated blocklist **blo
 package installs + IOC endpoints**.
 
 ## Terminal-first approvals
-Cerberus runs *inside* the agent's execution loop, so the terminal is the realtime decision point
+Warden runs *inside* the agent's execution loop, so the terminal is the realtime decision point
 and the dashboard is the deep dive. Per severity (default `CB_APPROVAL_SURFACE=terminal`):
 
 | verdict | terminal | web UI |
 |---|---|---|
 | **BLOCK** | ⛔ denied in-terminal (Claude shows the reason) + optional auto-open | forensics |
-| **HITL** | ✋ **Claude's native permission prompt**, with Cerberus's reason | forensics |
+| **HITL** | ✋ **Claude's native permission prompt**, with Warden's reason | forensics |
 | **AUDIT** | — (quiet) | elevated-risk record |
 | **ALLOW** | — (silent) | — |
 
@@ -273,7 +373,7 @@ Single Node + TypeScript package; the dashboard is a Vite/React app served by th
 risk weights are editable **YAML data**, not code (`rules/`).
 
 ## What it is — and isn't
-Cerberus is a **runtime gateway on the tool boundary**. It's strongest at secret-exfiltration
+Warden is a **runtime gateway on the tool boundary**. It's strongest at secret-exfiltration
 prevention and as a permission chokepoint. Because it sees tool calls (not the LLM prompt), it catches
 the *exploitation* of a prompt injection — not the injection itself — and it does **not** cover
 data-pipeline / RAG poisoning. The exfil match is high-confidence but not airtight (novel secret formats,

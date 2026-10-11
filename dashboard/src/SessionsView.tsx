@@ -32,7 +32,7 @@ export function SessionsView({ audit, now, initialSession }: { audit: AuditEntry
   const refresh = useCallback(() => {
     fetchSessions()
       .then((s) => { setSessions(s); setError(null); })
-      .catch((e: Error) => setError(e.message))
+      .catch(() => setError('Session history is unavailable. Start the local gateway, then refresh.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -87,7 +87,7 @@ export function SessionsView({ audit, now, initialSession }: { audit: AuditEntry
           placeholder="Filter by session id…"
           className="w-full mb-3 rounded-lg bg-slate-900/70 border border-white/10 px-3 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
         />
-        {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">Couldn’t load sessions: {error}</div>}
+        {error && <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">{error}</div>}
         {loading ? (
           <div className="text-sm text-slate-600 p-4">Loading…</div>
         ) : filteredSessions.length === 0 ? (
@@ -424,7 +424,7 @@ function TimelineRow({ item }: { item: TimelineItem }) {
           {e.tool && <span className="text-xs font-mono text-slate-300 truncate">{e.tool}</span>}
           {resolution && <span className="text-[10px] text-slate-500">({resolution}{latencyMs !== undefined ? ` · ${fmtDuration(latencyMs)}` : ''})</span>}
           {risk && risk.score > 0 && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ring-1 ${BAND_STYLE[risk.band]}`} title={risk.version}>⚖ {risk.score}</span>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ring-1 ${BAND_STYLE[risk.band]}`} title={risk.version}>RISK {risk.score}</span>
           )}
           <span className="ml-auto text-[10px] tabular-nums text-slate-600 shrink-0">{clockTime(e.ts)}</span>
           {expandable && <span className={`text-slate-600 text-[10px] transition ${open ? 'rotate-90' : ''}`}>▸</span>}
