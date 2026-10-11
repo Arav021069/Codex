@@ -19,6 +19,9 @@ export const EVENT_META: Record<AuditEvent, { icon: string; label: string; dot: 
   'taint-loaded': { icon: 'T', label: 'Secret loaded', dot: 'bg-orange-400' },
   'injection-detected': { icon: 'I', label: 'Injection detected', dot: 'bg-red-400' },
   'tool-failed': { icon: 'F', label: 'Tool failed', dot: 'bg-rose-500' },
+  'agent-paused': { icon: 'P', label: 'Agent paused', dot: 'bg-amber-400' },
+  'agent-resumed': { icon: 'A', label: 'Agent resumed', dot: 'bg-emerald-400' },
+  'agent-quarantined': { icon: 'Q', label: 'Agent quarantined', dot: 'bg-red-500' },
 };
 
 /** Turn a raw tool call into a human-readable "what the agent wants to do" (title + optional body). */

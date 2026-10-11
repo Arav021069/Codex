@@ -53,6 +53,7 @@ export function useEngine(): EngineState {
         switch (msg.type) {
           case 'hello':
             setPending(msg.pending);
+            if (msg.recent && msg.recent.length > 0) setAudit(msg.recent.slice(0, 200));
             break;
           case 'violation':
             setPending((p) => [msg.violation, ...p.filter((v) => v.id !== msg.violation.id)]);

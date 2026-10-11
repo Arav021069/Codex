@@ -11,6 +11,7 @@ import { DEFAULT_ANOMALY_CONFIG } from '../signals/behavioral.js';
 import { DEFAULT_CONTENT_CONFIG } from '../signals/content.js';
 import { DEFAULT_INJECTION_CONFIG } from '../signals/injection.js';
 import { rawEnv, strEnv, numEnv, flagEnv } from '../config/env.js';
+import type { AgentOverview, AgentStatus } from '../contract/types.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // CB_HOME / AG_HOME (set by bin/cerberus.mjs) is the package root, so bundled resources resolve whether
@@ -140,6 +141,49 @@ async function runPending(): Promise<void> {
   }
 }
 
+/** `cerberus audit verify [file]` — recompute the tamper-evident hash chain (M9). */
+async function runAuditVerify(file: string | undefined): Promise<void> {
+  const { AuditLog } = await import('../audit/index.js');
+  const target = file ?? strEnv('AUDIT', join(stateDir(), 'audit.jsonl'));
+  const report = new AuditLog(target).verify();
+  process.stdout.write(
+    `audit ${target}\n  ${report.ok ? '✅ VALID' : '❌ TAMPERED'} — ${report.reason}\n` +
+      (report.firstInvalidIndex !== undefined ? `  first invalid record: #${report.firstInvalidIndex} (ts ${report.firstInvalidTs})\n` : '') +
+      `  records: ${report.total}  verified: ${report.checked}\n`,
+  );
+  process.exit(report.ok ? 0 : 1);
+}
+
+/** `cerberus agents` — list governed sessions and their operator status (M9). */
+async function runAgents(): Promise<void> {
+  let r: Response;
+  try {
+    r = await engineFetch('/agents');
+  } catch {
+    process.stderr.write('Cerberus: cannot reach the engine. Start it with `cerberus engine`.\n');
+    process.exit(1);
+  }
+  if (!r.ok) { process.stderr.write(`Cerberus: /agents returned ${r.status}.\n`); process.exit(1); }
+  const { agents } = (await r.json()) as { agents: AgentOverview[] };
+  if (agents.length === 0) { process.stdout.write('No governed sessions seen yet.\n'); return; }
+  process.stdout.write(`${agents.length} governed session(s):\n`);
+  for (const a of agents) {
+    process.stdout.write(`  ${a.sessionId}  [${a.status.toUpperCase()}]  calls=${a.governedCalls}${a.reason ? `  · ${a.reason}` : ''}\n`);
+  }
+}
+
+/** `cerberus pause|resume|quarantine <sessionId> [reason]` — server-side agent control (M9). */
+async function runAgentStatus(status: AgentStatus, id: string | undefined, reason: string | undefined): Promise<void> {
+  const verb = status === 'paused' ? 'pause' : status === 'quarantined' ? 'quarantine' : 'resume';
+  if (!id) {
+    process.stderr.write(`usage: cerberus ${verb} <sessionId> [reason]   (list ids with \`cerberus agents\`)\n`);
+    process.exit(1);
+  }
+  const r = await engineFetch('/agents/status', { method: 'POST', body: JSON.stringify({ sessionId: id, status, reason }) });
+  if (r.ok) process.stdout.write(`✓ ${verb}d ${id} (status=${status})\n`);
+  else { process.stderr.write(`Cerberus: ${verb} failed (${r.status}). Is the engine running?\n`); process.exit(1); }
+}
+
 async function main(): Promise<void> {
   const cmd = process.argv[2];
   if (cmd === 'engine') return runEngine();
@@ -155,6 +199,15 @@ async function main(): Promise<void> {
   if (cmd === 'approve') return runDecision('ALLOW', process.argv[3]);
   if (cmd === 'deny') return runDecision('BLOCK', process.argv[3]);
   if (cmd === 'pending') return runPending();
+  if (cmd === 'agents') return runAgents();
+  if (cmd === 'pause') return runAgentStatus('paused', process.argv[3], process.argv.slice(4).join(' ') || undefined);
+  if (cmd === 'resume') return runAgentStatus('active', process.argv[3], process.argv.slice(4).join(' ') || undefined);
+  if (cmd === 'quarantine') return runAgentStatus('quarantined', process.argv[3], process.argv.slice(4).join(' ') || undefined);
+  if (cmd === 'audit' && process.argv[3] === 'verify') return runAuditVerify(process.argv[4]);
+  if (cmd === 'demo') {
+    const { runDemo } = await import('./demo.js');
+    return runDemo(process.argv.slice(3), PROJECT_ROOT);
+  }
   if (cmd === 'rules' && process.argv[3] === 'validate') {
     const { runValidate } = await import('./validate.js');
     return runValidate(process.argv.slice(4));
@@ -179,6 +232,10 @@ async function main(): Promise<void> {
       '  hook                        the Claude Code hook entry (spawned per tool call)\n' +
       '  pending                     list calls held for review (with their ids)\n' +
       '  approve <id> | deny <id>    resolve a held call from the terminal\n' +
+      '  agents                      list governed sessions + their operator status\n' +
+      '  pause|resume|quarantine <id> [reason]  block/unblock a session server-side\n' +
+      '  audit verify [file]         recompute the tamper-evident audit hash chain\n' +
+      '  demo seed [--reset]         write a deterministic demo fixture into the audit log\n' +
       '  rules validate [--file <path>]  lint rule YAML files before engine load\n' +
       '  scan [--file <tools.json>] [--pin] [--no-connect]  scan MCP tool defs (auto-discovers servers) for\n' +
       '                              poisoning + rug-pull (tool-pinning)\n' +

@@ -140,10 +140,42 @@ export type AuditEvent =
   | 'session-ended' //      a Claude Code session ended (SessionEnd hook) — also resets monitors
   | 'taint-loaded' //       a secret entered the agent's context (arms the exfil gate)
   | 'injection-detected' // prompt-injection found in a tool result (raises session posture)
-  | 'tool-failed'; //       an executed tool returned an error instead of a result
+  | 'tool-failed' //        an executed tool returned an error instead of a result
+  | 'agent-paused' //       an operator paused a governed session/agent (M9)
+  | 'agent-resumed' //      an operator resumed a previously paused/quarantined session (M9)
+  | 'agent-quarantined'; // an operator quarantined a session — all governed actions blocked (M9)
 
 /** How a held call was resolved (D23). Drives the latency metric (resolved.ts − opened.ts). */
 export type HitlResolution = 'approved' | 'rejected' | 'expired';
+
+/** Governance status of a governed session/agent, controlled server-side (M9). */
+export type AgentStatus = 'active' | 'paused' | 'quarantined';
+
+/** One operator control decision over a governed session/agent (M9). */
+export interface AgentControl {
+  sessionId: string;
+  status: AgentStatus;
+  reason?: string;
+  updatedAt: number;
+}
+
+/** A session in the operator's agent overview — latest status merged with its audit activity. */
+export interface AgentOverview {
+  sessionId: string;
+  status: AgentStatus;
+  reason?: string;
+  updatedAt?: number;
+  /** Total governed calls (decisions + resolved holds) observed for this session. */
+  governedCalls: number;
+  lastTs?: number;
+}
+
+/** Body of `POST /agents/status` — set a session's governance status (M9). */
+export interface AgentControlInput {
+  sessionId: string;
+  status: AgentStatus;
+  reason?: string;
+}
 
 /**
  * One line in the local audit log — a single observed event (D22/D23). `event`, `ts` (and `reason`
@@ -169,6 +201,24 @@ export interface AuditEntry {
   latencyMs?: number; //        hitl-resolved only
   secretTypes?: string[]; //    taint-loaded only
   injectionScore?: number; //   injection-detected only
+  /**
+   * Tamper-evidence (M9): the hash of the previous record in the log (`GENESIS` for the first) and
+   * this record's own hash over its canonical content + prevHash. A locally editable JSONL file is
+   * tamper-EVIDENT, not tamper-PROOF — `cerberus audit verify` detects edits/reorders/deletions.
+   */
+  prevHash?: string;
+  hash?: string;
+}
+
+/** Result of `cerberus audit verify` / `GET /audit/verify` — the first invalid entry, if any (M9). */
+export interface AuditVerification {
+  ok: boolean;
+  file: string;
+  total: number;
+  checked: number;
+  firstInvalidIndex?: number;
+  firstInvalidTs?: number;
+  reason: string;
 }
 
 /**
@@ -217,7 +267,7 @@ export interface SessionTimeline {
 
 /** Messages the Engine pushes to the Dashboard. */
 export type ServerToDashboard =
-  | { type: 'hello'; pending: SecurityViolation[] }
+  | { type: 'hello'; pending: SecurityViolation[]; recent?: AuditEntry[] }
   | { type: 'violation'; violation: SecurityViolation }
   | { type: 'resolved'; violationId: string; action: FinalAction }
   | { type: 'audit'; entry: AuditEntry };

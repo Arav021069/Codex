@@ -100,6 +100,8 @@ The verified baseline is **67 passing checks**:
 - **Adapters (22):** Claude Code, Codex, Cursor, and Cline event parsing and allow, ask, or deny response formatting.
 - **Audit (14):** valid decisions and lifecycle events persist; malformed events and missing required fields are rejected.
 
+Warden-specific additions are covered by `npm run test:audit-chain` (tamper detection: modified, reordered, deleted records fail verification; a missing log is never reported valid) and `npm run test:controls` (pause/quarantine block reasons, resume).
+
 Other inherited suites are available as individual `test:*` scripts in `package.json`. End-to-end, attack, and red-team simulations are separate commands. Passing the selected checks is not a full security assessment; see [What it is — and isn't](#what-it-is--and-isnt) and the [jury guide](JURY_DEMO_GUIDE.md).
 
 [![license](https://img.shields.io/github/license/bhoomik-codes/codex-3-hackathon.svg)](./LICENSE)
@@ -214,6 +216,21 @@ node bin/cerberus.mjs deps           # audit lockfiles for known-bad / vulnerabl
 node bin/cerberus.mjs proxy --mitm   # network egress gate: redact secrets from the outbound LLM prompt
 node bin/cerberus.mjs feeds refresh  # refresh the offline malicious-domain feed
 ```
+
+### Governance controls & tamper-evident audit (Warden)
+```bash
+npm run demo                       # one-command: check deps, build, seed fixture, start the gateway
+node bin/cerberus.mjs demo seed    # deterministic allow / block / human-review fixture (records only; runs NO tool)
+node bin/cerberus.mjs agents       # governed sessions and their server-side status
+node bin/cerberus.mjs pause <sessionId>        # kill switch — block all further governed actions
+node bin/cerberus.mjs resume <sessionId>
+node bin/cerberus.mjs quarantine <sessionId>   # strictest state; a pending approval cannot bypass it
+node bin/cerberus.mjs audit verify # recompute the audit hash chain; detects edits, reorders, deletions
+```
+Each audit record links to the previous by SHA-256 (`prevHash` + `hash`). This is **tamper-evident, not
+tamper-proof** — a locally editable file makes modification *detectable*, not impossible. Pause and
+quarantine are enforced at the `/intercept` boundary, server-side, so neither a client-supplied claim nor a
+previously pending approval can bypass them. `npm run demo -- --no-seed` skips reseeding an existing log.
 
 ### Troubleshooting
 | Symptom | Cause → fix |

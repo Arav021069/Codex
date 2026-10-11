@@ -36,8 +36,11 @@ import { WeightedRiskEngine, type RiskEngine } from '../risk/engine.js';
 import { IocStore, hostOf } from '../signals/ioc.js';
 import { AuditLog } from '../audit/index.js';
 import { projectTimeline, summarizeSessions } from '../audit/projector.js';
+import { AgentControlStore, AGENT_STATUSES } from '../controls/agents.js';
 import { classify } from '../taxonomy/index.js';
 import type {
+  AgentControlInput,
+  AgentOverview,
   AuditEntry,
   DashboardToServer,
   FinalAction,
@@ -82,6 +85,7 @@ export class Engine {
   private readonly risk: RiskEngine;
   private injection: InjectionClassifier = new DisabledInjectionClassifier();
   private readonly store = new InMemoryPendingStore();
+  private readonly controls = new AgentControlStore(); // M9: operator pause/quarantine, enforced server-side
   private readonly lastOpened = new Map<string, number>(); // session → last auto-open ts (rate-limit)
   private readonly audit: AuditLog;
   private readonly ioc: IocStore;
@@ -161,6 +165,27 @@ export class Engine {
       if (req.method === 'GET' && req.url === '/pending') {
         return json(res, 200, { pending: this.store.pending() });
       }
+      // M9: tamper-evidence status — recompute the audit hash chain and report the first bad record.
+      if (req.method === 'GET' && req.url === '/audit/verify') {
+        return json(res, 200, this.audit.verify());
+      }
+      // M9: operator agent controls, merged with sessions seen in the audit history.
+      if (req.method === 'GET' && req.url === '/agents') {
+        return json(res, 200, { agents: this.agentOverview(), controls: this.controls.list() });
+      }
+      if (req.method === 'POST' && req.url === '/agents/status') {
+        if (!originAllowed(req.headers.origin)) return json(res, 403, { error: 'forbidden origin' });
+        const body = await readJson<AgentControlInput>(req);
+        if (typeof body.sessionId !== 'string' || body.sessionId.length === 0) return json(res, 400, { error: 'sessionId required' });
+        if (!AGENT_STATUSES.has(body.status)) return json(res, 400, { error: `status must be one of ${[...AGENT_STATUSES].join('|')}` });
+        const control = this.controls.set(body.sessionId, body.status, body.reason);
+        this.writeAudit({
+          event: body.status === 'paused' ? 'agent-paused' : body.status === 'quarantined' ? 'agent-quarantined' : 'agent-resumed',
+          sessionId: body.sessionId,
+          reason: body.reason || `Operator set agent ${body.sessionId} to ${body.status}.`,
+        });
+        return json(res, 200, { ok: true, control });
+      }
       if (req.method === 'POST' && req.url === '/decision') {
         // Same sink as /ws (resolveContext auto-approves a held call) — gate cross-origin browsers out
         // (defense-in-depth alongside the missing-CORS-handler preflight that already blocks JSON POSTs).
@@ -203,6 +228,23 @@ export class Engine {
     call.sessionId = effectiveSession(call.sessionId, call.cwd); // M4: don't bucket distinct sessionless agents together
     const requestId = randomUUID(); // one id per tool-call decision; links its lifecycle events (D24)
     const category = classify(call.tool);
+
+    // M9: operator pause/quarantine is a server-side gate that no pending approval or client-supplied
+    // claim can bypass. A blocked call never reaches the signals, the pending queue, or the tool.
+    const controlReason = this.controls.blockReason(call.sessionId);
+    if (controlReason) {
+      this.writeAudit({
+        event: 'decision',
+        sessionId: call.sessionId,
+        requestId,
+        tool: call.tool,
+        input: call.input,
+        category,
+        action: 'BLOCK',
+        reason: controlReason,
+      });
+      return json(res, 200, { action: 'BLOCK', reason: controlReason, band: 'BLOCK' satisfies RiskBand, sessionId: call.sessionId });
+    }
 
     // Run all three signals (each has side effects — behavioral records the call, content records
     // path-risk), then fold them into one decision via strictest-wins (D7).
@@ -407,11 +449,33 @@ export class Engine {
     return json(res, 200, { ok: true });
   }
 
+  /** Merge operator controls with sessions observed in the audit history for the dashboard (M9). */
+  private agentOverview(): AgentOverview[] {
+    const seen = new Map<string, AgentOverview>();
+    for (const s of summarizeSessions(this.audit.read())) {
+      seen.set(s.sessionId, { sessionId: s.sessionId, status: 'active', governedCalls: s.verdicts, lastTs: s.lastTs });
+    }
+    for (const c of this.controls.list()) {
+      const existing = seen.get(c.sessionId);
+      if (existing) {
+        existing.status = c.status;
+        existing.reason = c.reason;
+        existing.updatedAt = c.updatedAt;
+      } else {
+        seen.set(c.sessionId, { sessionId: c.sessionId, status: c.status, reason: c.reason, updatedAt: c.updatedAt, governedCalls: 0 });
+      }
+    }
+    return [...seen.values()].sort((a, b) => (b.lastTs ?? b.updatedAt ?? 0) - (a.lastTs ?? a.updatedAt ?? 0));
+  }
+
   /* ------------------------------- WebSocket -------------------------------- */
 
   private onDashboardConnect(ws: WebSocket): void {
     this.clients.add(ws);
-    send(ws, { type: 'hello', pending: this.store.pending() });
+    // Hydrate from the persisted log (newest-first, capped) so the Live counters/stream reflect prior
+    // activity — e.g. a seeded demo fixture or history from before the dashboard opened (M9).
+    const recent = this.audit.read().slice(-200).reverse();
+    send(ws, { type: 'hello', pending: this.store.pending(), recent });
 
     ws.on('message', (raw) => {
       try {

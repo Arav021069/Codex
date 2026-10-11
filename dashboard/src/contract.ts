@@ -54,9 +54,46 @@ export type AuditEvent =
   | 'session-ended'
   | 'taint-loaded'
   | 'injection-detected'
-  | 'tool-failed';
+  | 'tool-failed'
+  | 'agent-paused'
+  | 'agent-resumed'
+  | 'agent-quarantined';
 
 export type HitlResolution = 'approved' | 'rejected' | 'expired';
+
+export type AgentStatus = 'active' | 'paused' | 'quarantined';
+
+export interface AgentControl {
+  sessionId: string;
+  status: AgentStatus;
+  reason?: string;
+  updatedAt: number;
+}
+
+export interface AgentOverview {
+  sessionId: string;
+  status: AgentStatus;
+  reason?: string;
+  updatedAt?: number;
+  governedCalls: number;
+  lastTs?: number;
+}
+
+export interface AgentControlInput {
+  sessionId: string;
+  status: AgentStatus;
+  reason?: string;
+}
+
+export interface AuditVerification {
+  ok: boolean;
+  file: string;
+  total: number;
+  checked: number;
+  firstInvalidIndex?: number;
+  firstInvalidTs?: number;
+  reason: string;
+}
 
 export interface AuditEntry {
   event: AuditEvent;
@@ -76,6 +113,8 @@ export interface AuditEntry {
   latencyMs?: number;
   secretTypes?: string[];
   injectionScore?: number;
+  prevHash?: string;
+  hash?: string;
 }
 
 export interface SessionSummary {
@@ -110,7 +149,7 @@ export interface SessionTimeline {
 }
 
 export type ServerToDashboard =
-  | { type: 'hello'; pending: SecurityViolation[] }
+  | { type: 'hello'; pending: SecurityViolation[]; recent?: AuditEntry[] }
   | { type: 'violation'; violation: SecurityViolation }
   | { type: 'resolved'; violationId: string; action: FinalAction }
   | { type: 'audit'; entry: AuditEntry };

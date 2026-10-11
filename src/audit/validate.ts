@@ -19,6 +19,9 @@ export const AUDIT_EVENTS: ReadonlySet<AuditEvent> = new Set<AuditEvent>([
   'taint-loaded',
   'injection-detected',
   'tool-failed',
+  'agent-paused',
+  'agent-resumed',
+  'agent-quarantined',
 ]);
 
 /** Events that describe a specific intercepted tool call, and so MUST carry a requestId (D24). */

@@ -11,17 +11,19 @@ Warden is a hackathon presentation and extension of the existing Cerberus local 
 - [x] Live decision summary derived from the actual audit stream.
 - [x] Build, rules validation, policy tests, adapter tests, audit tests, and a local API smoke check passed before the dashboard redesign.
 - [x] Re-run the dashboard and engine builds plus policy, adapter, and audit checks after the UI changes.
+- [x] Tamper-evident, hash-chained audit log + `cerberus audit verify` + live dashboard verification status.
+- [x] Server-side agent pause / resume / quarantine (enforced at the `/intercept` boundary) + `cerberus agents`.
 
 ## P0 — Make the jury demo dependable
 
-- [ ] **One-command startup:** add a Windows-friendly start script that checks Node, dependencies, and port 9000, then starts the gateway and dashboard with clear terminal labels.
-  - Done when a clean setup can reach the dashboard using only the README steps and the process prints the local URL.
-- [ ] **Demo reset and seed:** provide a safe reset command and a deterministic demo fixture that generates one allowed read, one policy-blocked risky action, and one human-review request.
-  - Done when the same three cases are available on every run, no real destructive command executes, and the dashboard explains the result.
+- [x] **One-command startup:** `npm run demo` checks Node and dependencies, installs/builds if needed, seeds the fixture, and starts the gateway with labeled steps + the local URL.
+  - Done — a clean setup reaches the dashboard using only the README steps; the process prints http://127.0.0.1:9000/.
+- [x] **Demo reset and seed:** `cerberus demo seed` writes a deterministic fixture (one allowed read, one policy-blocked risky action, one human-review request that is denied) into the audit log; it records events only and never executes a tool.
+  - Done — the same three cases are available on every run (backup written on reset) and the Sessions/history views explain each result.
 - [ ] **Visible decision rationale:** show the matched rule, decision reason, risk signal, and policy outcome together for each pending and completed tool call.
   - Done when a judge can answer “why was this allowed or stopped?” from the screen without reading source code.
-- [ ] **Approval lifecycle:** verify approve and block buttons resolve the real pending request and immediately update the audit trail; show expiration clearly.
-  - Done when both paths can be demonstrated live, including the resulting agent response.
+- [x] **Approval lifecycle:** verified end-to-end that approve and block resolve the real pending request and update the audit trail (dashboard `/ws` decision + `cerberus approve|deny`), including fail-closed timeout.
+  - Done — both paths demonstrated in the engine integration check; the resolved `hitl-resolved` event and evolving agent response are recorded.
 - [ ] **First-run reliability:** validate the documented setup on a fresh clone and fix stale URLs, missing prerequisites, port conflicts, and unclear error messages.
   - Done when the demo can be started from a fresh shell without undocumented steps.
 - [ ] **Responsive and legible UI:** inspect the live and sessions views at projector/laptop size and a narrow viewport; check keyboard focus and reduced-motion behavior.
