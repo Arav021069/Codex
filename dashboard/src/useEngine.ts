@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type {
   AuditEntry,
-  DashboardToServer,
   FinalAction,
   SecurityViolation,
   ServerToDashboard,
 } from './contract';
+import { decideViolation, fetchPending } from './api';
 
 // When the dashboard is served BY the engine (production), derive the WS URL from the page origin so
 // it works on whatever host/port the engine runs. For standalone `vite dev`, set VITE_AG_WS (the dev
@@ -22,9 +22,11 @@ const WS_URL = import.meta.env.VITE_AG_WS ?? defaultWsUrl();
 
 export interface EngineState {
   connected: boolean;
+  /** Calls currently held for human review — the live approval inbox. */
   pending: SecurityViolation[];
   audit: AuditEntry[];
-  decide: (violationId: string, action: FinalAction) => void;
+  /** Submit a verdict through the engine's REST approval endpoint; resolves on success, throws on failure. */
+  decide: (violationId: string, action: FinalAction) => Promise<void>;
 }
 
 /** Subscribes to the engine over WebSocket and exposes live pending + audit state. */
@@ -32,7 +34,6 @@ export function useEngine(): EngineState {
   const [connected, setConnected] = useState(false);
   const [pending, setPending] = useState<SecurityViolation[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     let stopped = false;
@@ -41,7 +42,6 @@ export function useEngine(): EngineState {
 
     const connect = (): void => {
       ws = new WebSocket(WS_URL);
-      wsRef.current = ws;
       ws.onopen = () => setConnected(true);
       ws.onclose = () => {
         setConnected(false);
@@ -69,6 +69,10 @@ export function useEngine(): EngineState {
     };
 
     connect();
+    // Reconcile the inbox from the REST snapshot too, so a slow WS handshake never hides held calls.
+    fetchPending()
+      .then((p) => { if (!stopped) setPending(p); })
+      .catch(() => { /* the WS hello carries the same snapshot; a failed reconcile is non-fatal */ });
     return () => {
       stopped = true;
       clearTimeout(retry);
@@ -76,9 +80,10 @@ export function useEngine(): EngineState {
     };
   }, []);
 
-  const decide = useCallback((violationId: string, action: FinalAction) => {
-    const msg: DashboardToServer = { type: 'decision', violationId, action };
-    wsRef.current?.send(JSON.stringify(msg));
+  const decide = useCallback(async (violationId: string, action: FinalAction) => {
+    await decideViolation(violationId, action);
+    // Only clear the card once the engine has accepted the verdict; the server also broadcasts 'resolved'.
+    setPending((p) => p.filter((v) => v.id !== violationId));
   }, []);
 
   return { connected, pending, audit, decide };

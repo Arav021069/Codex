@@ -2,7 +2,15 @@
  * REST helpers for the investigation history (D25). When the dashboard is served BY the engine the
  * base is the page origin; for standalone `vite dev` set VITE_AG_API to the engine's URL.
  */
-import type { AgentOverview, AgentStatus, AuditVerification, SessionSummary, SessionTimeline } from './contract';
+import type {
+  AgentOverview,
+  AgentStatus,
+  AuditVerification,
+  FinalAction,
+  SecurityViolation,
+  SessionSummary,
+  SessionTimeline,
+} from './contract';
 
 function apiBase(): string {
   if (import.meta.env.VITE_AG_API) return String(import.meta.env.VITE_AG_API).replace(/\/$/, '');
@@ -23,6 +31,28 @@ export async function fetchTimeline(sessionId: string): Promise<SessionTimeline>
   const res = await fetch(`${apiBase()}/sessions/${encodeURIComponent(sessionId)}/timeline`);
   if (!res.ok) throw new Error(`/sessions/${sessionId}/timeline ${res.status}`);
   return (await res.json()) as SessionTimeline;
+}
+
+/** Calls held for human review right now (the approval inbox). Authoritative snapshot from the engine. */
+export async function fetchPending(): Promise<SecurityViolation[]> {
+  const res = await fetch(`${apiBase()}/pending`);
+  if (!res.ok) throw new Error(`/pending ${res.status}`);
+  const data = (await res.json()) as { pending: SecurityViolation[] };
+  return data.pending ?? [];
+}
+
+/**
+ * Submit a human decision for a held call via the engine's real approval endpoint. Resolves only when
+ * the engine has accepted (or rejected) the decision, so the caller can show an accurate success/error
+ * state instead of optimistically assuming the verdict landed.
+ */
+export async function decideViolation(violationId: string, action: FinalAction): Promise<void> {
+  const res = await fetch(`${apiBase()}/decision`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'decision', violationId, action }),
+  });
+  if (!res.ok) throw new Error(`/decision ${res.status}`);
 }
 
 export async function fetchAuditVerify(): Promise<AuditVerification> {
